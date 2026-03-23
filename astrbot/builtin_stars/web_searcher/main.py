@@ -28,6 +28,11 @@ class Main(star.Star):
 
     def __init__(self, context: star.Context) -> None:
         self.context = context
+
+    def _add_if_active(self, tool_set, tool) -> None:
+        """Add a tool to the set only if it exists and is active."""
+        if tool and tool.active:
+            tool_set.add_tool(tool)
         self.tavily_key_index = 0
         self.tavily_key_lock = asyncio.Lock()
 
@@ -565,27 +570,15 @@ class Main(star.Star):
 
         func_tool_mgr = self.context.get_llm_tool_manager()
         if provider == "default":
-            web_search_t = func_tool_mgr.get_func("web_search")
-            fetch_url_t = func_tool_mgr.get_func("fetch_url")
-            if web_search_t and web_search_t.active:
-                tool_set.add_tool(web_search_t)
-            if fetch_url_t and fetch_url_t.active:
-                tool_set.add_tool(fetch_url_t)
-            tool_set.remove_tool("web_search_tavily")
-            tool_set.remove_tool("tavily_extract_web_page")
-            tool_set.remove_tool("AIsearch")
-            tool_set.remove_tool("web_search_bocha")
+            for tool_name in ("web_search", "fetch_url"):
+                self._add_if_active(tool_set, func_tool_mgr.get_func(tool_name))
+            for tool_name in ("web_search_tavily", "tavily_extract_web_page", "AIsearch", "web_search_bocha"):
+                tool_set.remove_tool(tool_name)
         elif provider == "tavily":
-            web_search_tavily = func_tool_mgr.get_func("web_search_tavily")
-            tavily_extract_web_page = func_tool_mgr.get_func("tavily_extract_web_page")
-            if web_search_tavily and web_search_tavily.active:
-                tool_set.add_tool(web_search_tavily)
-            if tavily_extract_web_page and tavily_extract_web_page.active:
-                tool_set.add_tool(tavily_extract_web_page)
-            tool_set.remove_tool("web_search")
-            tool_set.remove_tool("fetch_url")
-            tool_set.remove_tool("AIsearch")
-            tool_set.remove_tool("web_search_bocha")
+            for tool_name in ("web_search_tavily", "tavily_extract_web_page"):
+                self._add_if_active(tool_set, func_tool_mgr.get_func(tool_name))
+            for tool_name in ("web_search", "fetch_url", "AIsearch", "web_search_bocha"):
+                tool_set.remove_tool(tool_name)
         elif provider == "baidu_ai_search":
             try:
                 await self.ensure_baidu_ai_search_mcp(event.unified_msg_origin)
