@@ -123,6 +123,73 @@ async def download_image_by_url(
         raise e
 
 
+def save_temp_audio(audio_data: bytes) -> str:
+    """Save audio data to a temporary file with .audio extension."""
+    temp_dir = get_astrbot_temp_path()
+    timestamp = f"{int(time.time())}_{uuid.uuid4().hex[:8]}"
+    p = os.path.join(temp_dir, f"io_temp_audio_{timestamp}.audio")
+    with open(p, "wb") as f:
+        f.write(audio_data)
+    return p
+
+
+async def download_audio_by_url(
+    url: str,
+    post: bool = False,
+    post_data: dict | None = None,
+    path: str | None = None,
+) -> str:
+    """Download audio file from URL, return path."""
+    try:
+        ssl_context = ssl.create_default_context(
+            cafile=certifi.where(),
+        )
+        connector = aiohttp.TCPConnector(ssl=ssl_context)
+        async with aiohttp.ClientSession(
+            trust_env=True,
+            connector=connector,
+        ) as session:
+            if post:
+                async with session.post(url, json=post_data) as resp:
+                    if not path:
+                        return save_temp_audio(await resp.read())
+                    with open(path, "wb") as f:
+                        f.write(await resp.read())
+                    return path
+            else:
+                async with session.get(url) as resp:
+                    if not path:
+                        return save_temp_audio(await resp.read())
+                    with open(path, "wb") as f:
+                        f.write(await resp.read())
+                    return path
+    except (aiohttp.ClientConnectorSSLError, aiohttp.ClientConnectorCertificateError):
+        logger.warning(
+            f"SSL certificate verification failed for {url}. "
+            "Disabling SSL verification (CERT_NONE) as a fallback."
+        )
+        ssl_context = ssl.create_default_context()
+        ssl_context.check_hostname = False
+        ssl_context.verify_mode = ssl.CERT_NONE
+        async with aiohttp.ClientSession() as session:
+            if post:
+                async with session.post(url, json=post_data, ssl=ssl_context) as resp:
+                    if not path:
+                        return save_temp_audio(await resp.read())
+                    with open(path, "wb") as f:
+                        f.write(await resp.read())
+                    return path
+            else:
+                async with session.get(url, ssl=ssl_context) as resp:
+                    if not path:
+                        return save_temp_audio(await resp.read())
+                    with open(path, "wb") as f:
+                        f.write(await resp.read())
+                    return path
+    except Exception as e:
+        raise e
+
+
 async def download_file(url: str, path: str, show_progress: bool = False) -> None:
     """从指定 url 下载文件到指定路径 path"""
     try:
